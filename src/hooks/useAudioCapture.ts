@@ -51,9 +51,6 @@ export function useAudioCapture(): AudioCaptureReturn {
       ...prev,
       detectedNotes: [...prev.detectedNotes, note],
     }));
-    console.log(
-      `[TrueKey Pitch] Note completed: ${note.noteName} | Duration: ${note.durationMs}ms | Freq: ${note.frequency.toFixed(1)} Hz`
-    );
   }, []);
 
   /**
@@ -81,9 +78,6 @@ export function useAudioCapture(): AudioCaptureReturn {
       // Update currentNote state for real-time UI feedback
       if (result) {
         setState((prev) => ({ ...prev, currentNote: result }));
-        console.log(
-          `[TrueKey Pitch] Note started: ${result.noteName} (${result.frequency.toFixed(1)} Hz)`
-        );
       }
 
       // Schedule next frame
@@ -103,13 +97,8 @@ export function useAudioCapture(): AudioCaptureReturn {
     const notes = collectedNotesRef.current;
 
     if (notes.length === 0) {
-      console.log('[TrueKey] No notes detected during recording.');
       return;
     }
-
-    // Log summary of collected notes
-    const totalDuration = notes.reduce((sum, n) => sum + n.durationMs, 0);
-    console.log(`[TrueKey] Analyzing ${notes.length} notes (total duration: ${(totalDuration / 1000).toFixed(1)}s)...`);
 
     // Run key analysis with duration weighting
     const result = analyzeKeyWithDuration(notes);
@@ -121,27 +110,6 @@ export function useAudioCapture(): AudioCaptureReturn {
 
     // Update keyResult state for UI
     setState((prev) => ({ ...prev, keyResult: result }));
-
-    const { primary, alternative, isAmbiguous } = result;
-
-    // Log primary key
-    console.log(
-      `[TrueKey] Detected key: ${primary.key} ${primary.mode} (confidence: ${Math.round(primary.confidence * 100)}%)`
-    );
-    console.log(`[TrueKey] Scale notes: ${primary.scaleNotes.join(' – ')}`);
-
-    // Log alternative key if exists (relative major/minor)
-    if (alternative) {
-      if (isAmbiguous) {
-        console.log('[TrueKey] ⚠️ Ambiguous result - could also be:');
-      } else {
-        console.log('[TrueKey] Alternative (relative key):');
-      }
-      console.log(
-        `[TrueKey] → ${alternative.key} ${alternative.mode} (confidence: ${Math.round(alternative.confidence * 100)}%)`
-      );
-      console.log(`[TrueKey] → Scale notes: ${alternative.scaleNotes.join(' – ')}`);
-    }
   }, []);
 
   /**

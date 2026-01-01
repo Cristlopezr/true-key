@@ -47,6 +47,41 @@ export interface KeyAnalysisResult {
 }
 
 /**
+ * Calculates softmax probabilities from an array of scores.
+ * Converts raw scores into probabilities that sum to 1 (100%).
+ * Uses temperature scaling to control distribution sharpness.
+ */
+function softmax(scores: number[], temperature: number = 1.0): number[] {
+  // Subtract max for numerical stability (prevents overflow)
+  const maxScore = Math.max(...scores);
+  const expScores = scores.map(s => Math.exp((s - maxScore) / temperature));
+  const sumExp = expScores.reduce((a, b) => a + b, 0);
+  return expScores.map(exp => exp / sumExp);
+}
+
+/**
+ * Calculates the percentage of notes (duration-weighted) that fit within a scale.
+ */
+function calculateScaleFit(
+  root: PitchClass,
+  mode: Mode,
+  noteWeights: Map<PitchClass, number>,
+  totalDuration: number
+): number {
+  if (totalDuration === 0) return 0;
+
+  const scaleNotes = getScaleNotesSet(root, mode);
+  let inScaleDuration = 0;
+
+  for (const [note, duration] of noteWeights) {
+    if (scaleNotes.has(note)) {
+      inScaleDuration += duration;
+    }
+  }
+
+  return inScaleDuration / totalDuration;
+}
+/**
  * Mapping of flat notes to sharp equivalents
  */
 const FLAT_TO_SHARP: Record<string, PitchClass> = {
@@ -273,9 +308,6 @@ export function analyzeKey(notes: string[]): KeyAnalysisResult | null {
   const firstNote = normalizedNotes[0] ?? null;
   const lastNote = normalizedNotes[normalizedNotes.length - 1] ?? null;
 
-  // Log note frequency
-  console.log('[TrueKey] Note frequency:', Object.fromEntries(noteFrequency));
-
   // Step 2: Score each possible key/mode combination
   const scores: Array<{ key: PitchClass; mode: Mode; score: number }> = [];
 
@@ -296,16 +328,19 @@ export function analyzeKey(notes: string[]): KeyAnalysisResult | null {
     return null;
   }
 
-  // Step 4: Calculate confidence
-  const gap = secondBest ? best.score - secondBest.score : best.score;
-  const confidence = Math.min(1, Math.max(0, gap / (best.score * 0.3)));
+  // Step 4: Calculate real probabilities using softmax
+  const allScores = scores.map(s => s.score);
+  const probabilities = softmax(allScores);
+
+  // Confidence is the actual probability of the best key
+  const confidence = probabilities[0];
 
   // Step 5: Check if second best is the relative major/minor
   const isRelative = secondBest && areRelativeKeys(best, secondBest);
-  const scoreRatio = secondBest ? secondBest.score / best.score : 0;
+  const probabilityRatio = probabilities[1] / probabilities[0];
   
-  // Consider ambiguous if relative key is within 15% of best score
-  const isAmbiguous = isRelative && scoreRatio > 0.85;
+  // Consider ambiguous if relative key has probability within 15% of best
+  const isAmbiguous = isRelative && probabilityRatio > 0.85;
 
   // Build primary result
   const primaryResult: KeyDetectionResult = {
@@ -319,12 +354,12 @@ export function analyzeKey(notes: string[]): KeyAnalysisResult | null {
   // Build alternative result if it's the relative key and close enough
   let alternativeResult: KeyDetectionResult | null = null;
   
-  if (isRelative && scoreRatio > 0.7) {
-    const altConfidence = Math.min(1, Math.max(0, (secondBest.score / best.score)));
+  if (isRelative && probabilityRatio > 0.5) {
+    const altProbability = probabilities[1];
     alternativeResult = {
       key: secondBest.key,
       mode: secondBest.mode,
-      confidence: Math.round(altConfidence * 100) / 100,
+      confidence: Math.round(altProbability * 100) / 100,
       score: Math.round(secondBest.score * 100) / 100,
       scaleNotes: getScaleNotes(secondBest.key, secondBest.mode),
     };
@@ -341,7 +376,6 @@ export function analyzeKey(notes: string[]): KeyAnalysisResult | null {
  * Convenience function for testing and logging.
  */
 export function analyzeAndLogKey(notes: string[]): KeyAnalysisResult | null {
-  console.log('[TrueKey] Analyzing', notes.length, 'notes...');
   return analyzeKey(notes);
 }
 
@@ -470,13 +504,6 @@ export function analyzeKeyWithDuration(notes: NoteWithDuration[]): KeyAnalysisRe
   const firstNote = normalizedNotes[0]?.pitchClass ?? null;
   const lastNote = normalizedNotes[normalizedNotes.length - 1]?.pitchClass ?? null;
 
-  // Log weighted note frequency
-  const weightedFrequency: Record<string, string> = {};
-  for (const [note, duration] of noteWeights) {
-    weightedFrequency[note] = `${(duration / 1000).toFixed(1)}s`;
-  }
-  console.log('[TrueKey] Note durations:', weightedFrequency);
-
   // Step 2: Score each possible key/mode combination
   const scores: Array<{ key: PitchClass; mode: Mode; score: number }> = [];
 
@@ -497,21 +524,24 @@ export function analyzeKeyWithDuration(notes: NoteWithDuration[]): KeyAnalysisRe
     return null;
   }
 
-  // Step 4: Calculate confidence
-  const gap = secondBest ? best.score - secondBest.score : best.score;
-  const confidence = Math.min(1, Math.max(0, gap / (best.score * 0.3)));
+  // Step 4: Calculate confidence based on scale fit (independent for each key)
+  // Confidence = % of total duration that fits in the scale
+  const confidence = calculateScaleFit(best.key, best.mode, noteWeights, totalDuration);
 
   // Step 5: Check if second best is the relative major/minor
   const isRelative = secondBest && areRelativeKeys(best, secondBest);
+  // We use score ratio only to check if they are close enough to be considered
   const scoreRatio = secondBest ? secondBest.score / best.score : 0;
   
-  // Consider ambiguous if relative key is within 15% of best score
+  // Consider ambiguous if relative key has similar score
   const isAmbiguous = isRelative && scoreRatio > 0.85;
 
   // Build primary result
   const primaryResult: KeyDetectionResult = {
     key: best.key,
     mode: best.mode,
+    // Confidence is now % of notes in scale
+    // We cap it at 99% to avoid showing 100% unless absolutely perfect
     confidence: Math.round(confidence * 100) / 100,
     score: Math.round(best.score * 100) / 100,
     scaleNotes: getScaleNotes(best.key, best.mode),
@@ -521,7 +551,9 @@ export function analyzeKeyWithDuration(notes: NoteWithDuration[]): KeyAnalysisRe
   let alternativeResult: KeyDetectionResult | null = null;
   
   if (isRelative && scoreRatio > 0.7) {
-    const altConfidence = Math.min(1, Math.max(0, secondBest.score / best.score));
+    // Calculate independent confidence for the alternative key
+    const altConfidence = calculateScaleFit(secondBest.key, secondBest.mode, noteWeights, totalDuration);
+    
     alternativeResult = {
       key: secondBest.key,
       mode: secondBest.mode,

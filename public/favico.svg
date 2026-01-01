@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="sonicGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7928CA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00F5D4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="#1a1a2e"/>
+  
+  <g stroke="url(#sonicGrad)" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="24" cy="44" r="10" stroke-width="4"/>
+    <circle cx="24" cy="44" r="4" stroke-width="3" opacity="0.6"/>
+    
+    <path d="M34 44 V 16 C 34 16 46 16 54 24"/>
+    <path d="M38 38 V 20 C 38 20 46 20 50 24" opacity="0.7"/>
+  </g>
+</svg>
