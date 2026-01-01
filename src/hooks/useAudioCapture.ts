@@ -1,10 +1,13 @@
 import { useRef, useState, useCallback } from 'react';
-import { createPitchDetector, type PitchDetector, type DetectedNote } from '@/utils/pitchDetection';
-import { analyzeKeyWithDuration } from '@/utils/keyDetection';
+import { createPitchDetector, type PitchDetector, type DetectedNote, type PitchResult } from '@/utils/pitchDetection';
+import { analyzeKeyWithDuration, type KeyAnalysisResult } from '@/utils/keyDetection';
 
 interface AudioCaptureState {
   isCapturing: boolean;
   error: string | null;
+  currentNote: PitchResult | null;
+  detectedNotes: DetectedNote[];
+  keyResult: KeyAnalysisResult | null;
 }
 
 interface AudioCaptureReturn extends AudioCaptureState {
@@ -21,6 +24,9 @@ export function useAudioCapture(): AudioCaptureReturn {
   const [state, setState] = useState<AudioCaptureState>({
     isCapturing: false,
     error: null,
+    currentNote: null,
+    detectedNotes: [],
+    keyResult: null,
   });
 
   // Refs to persist audio nodes across renders
@@ -40,6 +46,11 @@ export function useAudioCapture(): AudioCaptureReturn {
    */
   const handleNoteComplete = useCallback((note: DetectedNote) => {
     collectedNotesRef.current.push(note);
+    // Update detectedNotes state for UI
+    setState((prev) => ({
+      ...prev,
+      detectedNotes: [...prev.detectedNotes, note],
+    }));
     console.log(
       `[TrueKey Pitch] Note completed: ${note.noteName} | Duration: ${note.durationMs}ms | Freq: ${note.frequency.toFixed(1)} Hz`
     );
@@ -67,8 +78,9 @@ export function useAudioCapture(): AudioCaptureReturn {
       // Note: The pitch detector will call handleNoteComplete when notes end
       const result = pitchDetector.process(dataArray);
 
-      // Log when a new note starts (for real-time feedback)
+      // Update currentNote state for real-time UI feedback
       if (result) {
+        setState((prev) => ({ ...prev, currentNote: result }));
         console.log(
           `[TrueKey Pitch] Note started: ${result.noteName} (${result.frequency.toFixed(1)} Hz)`
         );
@@ -107,6 +119,9 @@ export function useAudioCapture(): AudioCaptureReturn {
       return;
     }
 
+    // Update keyResult state for UI
+    setState((prev) => ({ ...prev, keyResult: result }));
+
     const { primary, alternative, isAmbiguous } = result;
 
     // Log primary key
@@ -134,8 +149,14 @@ export function useAudioCapture(): AudioCaptureReturn {
    * Sets up AudioContext, MediaStreamAudioSourceNode, and AnalyserNode.
    */
   const startCapture = useCallback(async () => {
-    // Reset any previous error
-    setState((prev) => ({ ...prev, error: null }));
+    // Reset state for new capture session
+    setState({
+      isCapturing: false,
+      error: null,
+      currentNote: null,
+      detectedNotes: [],
+      keyResult: null,
+    });
 
     // Clear previously collected notes
     collectedNotesRef.current = [];
@@ -177,8 +198,8 @@ export function useAudioCapture(): AudioCaptureReturn {
       // Step 5: Connect source -> analyser
       sourceNode.connect(analyserNode);
 
-      // Update state
-      setState({ isCapturing: true, error: null });
+      // Update state - preserve empty arrays/nulls, just set capturing
+      setState((prev) => ({ ...prev, isCapturing: true, error: null }));
 
       // Step 6: Start reading audio data
       readAudioData();
@@ -209,7 +230,7 @@ export function useAudioCapture(): AudioCaptureReturn {
       }
 
       console.error('[TrueKey Audio] Error:', errorMessage);
-      setState({ isCapturing: false, error: errorMessage });
+      setState((prev) => ({ ...prev, isCapturing: false, error: errorMessage }));
     }
   }, [readAudioData, handleNoteComplete]);
 
@@ -260,13 +281,16 @@ export function useAudioCapture(): AudioCaptureReturn {
     // Analyze collected notes and determine key (ONLY on stop)
     analyzeCollectedNotes();
 
-    setState({ isCapturing: false, error: null });
+    setState((prev) => ({ ...prev, isCapturing: false, currentNote: null }));
     console.log('[TrueKey Audio] Audio capture stopped and resources cleaned up.');
   }, [analyzeCollectedNotes]);
 
   return {
     isCapturing: state.isCapturing,
     error: state.error,
+    currentNote: state.currentNote,
+    detectedNotes: state.detectedNotes,
+    keyResult: state.keyResult,
     startCapture,
     stopCapture,
   };
