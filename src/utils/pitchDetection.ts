@@ -1,4 +1,4 @@
-import { YIN } from 'pitchfinder';
+import { ACF2PLUS } from 'pitchfinder';
 
 // Note names in chromatic order
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -8,7 +8,7 @@ const A4_FREQUENCY = 440;
 const A4_MIDI_NUMBER = 69;
 
 // RMS threshold for silence filtering (higher = less sensitive to noise)
-const RMS_THRESHOLD = 0.02;
+const RMS_THRESHOLD = 0.015;
 
 // Number of consecutive detections required for note stability
 const STABILITY_THRESHOLD = 3;
@@ -62,9 +62,13 @@ type OnNoteCompleteCallback = (note: DetectedNote) => void;
 export function createPitchDetector(config: PitchDetectorConfig) {
   const { sampleRate, bufferSize: _bufferSize = 2048 } = config;
 
-  // Initialize YIN detector - good for voice/monophonic signals
-  // Threshold 0.15 reduces octave errors for voice detection
-  const detectPitch = YIN({ sampleRate, threshold: 0.15 });
+  // Initialize ACF2+ detector (Autocorrelation) - more robust than YIN for sustained notes
+  // ACF2+ doesn't require a threshold parameter
+  const detectPitch = ACF2PLUS({ sampleRate });
+  
+  // Maximum valid frequency - anything above this is an algorithm error
+  // Using sampleRate/4 as upper bound (e.g., 12000Hz for 48000Hz sample rate)
+  const maxValidFrequency = sampleRate / 4;
 
   // State for note stability tracking
   let lastDetectedNote: string | null = null;
@@ -156,14 +160,17 @@ export function createPitchDetector(config: PitchDetectorConfig) {
   function process(buffer: Float32Array): PitchResult | null {
     // Step 1: Check RMS threshold (silence filtering)
     const rms = calculateRMS(buffer);
+    
     if (rms < RMS_THRESHOLD) {
       // Silence detected - finalize any current note
       if (currentNoteData) {
         finalizeCurrentNote();
       }
 
-      // Reset stability tracking on silence
+      // Reset ALL stability tracking on silence
+      // This allows the same note to be re-detected after silence
       lastDetectedNote = null;
+      lastStableNote = null;
       consecutiveCount = 0;
       return null;
     }
@@ -179,6 +186,14 @@ export function createPitchDetector(config: PitchDetectorConfig) {
       }
 
       lastDetectedNote = null;
+      consecutiveCount = 0;
+      return null;
+    }
+
+    // Filter out frequencies that are clearly YIN algorithm errors
+    // maxValidFrequency is sampleRate/4 - anything higher is likely aliasing/errors
+    if (frequency > maxValidFrequency) {
+      // This is an algorithm error - reset tracking to recover
       consecutiveCount = 0;
       return null;
     }

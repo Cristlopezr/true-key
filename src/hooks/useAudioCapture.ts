@@ -33,6 +33,7 @@ export function useAudioCapture(): AudioCaptureReturn {
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const lowpassFilterRef = useRef<BiquadFilterNode | null>(null);
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const pitchDetectorRef = useRef<PitchDetector | null>(null);
@@ -46,10 +47,11 @@ export function useAudioCapture(): AudioCaptureReturn {
    */
   const handleNoteComplete = useCallback((note: DetectedNote) => {
     collectedNotesRef.current.push(note);
-    // Update detectedNotes state for UI
+    // Update detectedNotes state for UI and clear currentNote since the note ended
     setState((prev) => ({
       ...prev,
       detectedNotes: [...prev.detectedNotes, note],
+      currentNote: null,
     }));
   }, []);
 
@@ -144,7 +146,7 @@ export function useAudioCapture(): AudioCaptureReturn {
       // Step 2.5: Initialize pitch detector with the correct sample rate
       const pitchDetector = createPitchDetector({
         sampleRate: audioContext.sampleRate,
-        bufferSize: 2048,
+        bufferSize: 4096,
       });
 
       // Set up callback for when notes complete (with duration)
@@ -155,21 +157,30 @@ export function useAudioCapture(): AudioCaptureReturn {
       const sourceNode = audioContext.createMediaStreamSource(stream);
       sourceNodeRef.current = sourceNode;
 
-      // Step 4: Create AnalyserNode for reading audio data
+      // Step 4: Create low-pass filter to remove high frequencies (reduces YIN errors)
+      // Cutoff at 1500Hz - well above human voice range (80-1100Hz) but removes ultrasonic noise
+      const lowpassFilter = audioContext.createBiquadFilter();
+      lowpassFilter.type = 'lowpass';
+      lowpassFilter.frequency.value = 1500;
+      lowpassFilter.Q.value = 1; // Gentle rolloff
+      lowpassFilterRef.current = lowpassFilter;
+
+      // Step 5: Create AnalyserNode for reading audio data
       const analyserNode = audioContext.createAnalyser();
-      analyserNode.fftSize = 2048; // Buffer size for time-domain data
+      analyserNode.fftSize = 4096; // Larger buffer for better low-frequency resolution
       // smoothingTimeConstant = 0 for raw data (no temporal blur between frames)
       // This is critical for accurate pitch detection
       analyserNode.smoothingTimeConstant = 0;
       analyserNodeRef.current = analyserNode;
 
-      // Step 5: Connect source -> analyser
-      sourceNode.connect(analyserNode);
+      // Step 6: Connect source -> lowpass filter -> analyser
+      sourceNode.connect(lowpassFilter);
+      lowpassFilter.connect(analyserNode);
 
       // Update state - preserve empty arrays/nulls, just set capturing
       setState((prev) => ({ ...prev, isCapturing: true, error: null }));
 
-      // Step 6: Start reading audio data
+      // Step 7: Start reading audio data
       readAudioData();
       console.log('[TrueKey Audio] Started capturing audio data...');
     } catch (err) {
@@ -225,6 +236,11 @@ export function useAudioCapture(): AudioCaptureReturn {
     if (sourceNodeRef.current) {
       sourceNodeRef.current.disconnect();
       sourceNodeRef.current = null;
+    }
+
+    if (lowpassFilterRef.current) {
+      lowpassFilterRef.current.disconnect();
+      lowpassFilterRef.current = null;
     }
 
     if (analyserNodeRef.current) {
