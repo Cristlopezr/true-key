@@ -1,7 +1,6 @@
 import { type DetectedNote } from '@/utils/pitchDetection';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 interface NotesHistoryProps {
   notes: DetectedNote[];
@@ -44,45 +43,35 @@ function formatDuration(ms: number): string {
 
 export function NotesHistory({ notes }: NotesHistoryProps) {
   if (notes.length === 0) {
-    return null;
+    return (
+        <div className="h-full flex items-center justify-center text-neutral-400 text-sm italic">
+            Waiting for input...
+        </div>
+    );
   }
 
   const aggregatedNotes = aggregateNotes(notes);
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-3 text-base font-semibold">
-          Notes Detected
-          <Badge variant="secondary" className="text-xs">
-            {aggregatedNotes.length} unique
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <ScrollArea className="h-[140px]">
-          <div className="flex flex-col gap-2">
-            {aggregatedNotes.map((note) => (
-              <div
-                key={note.note}
-                className="flex items-center gap-3 p-2 px-3 bg-muted rounded-md animate-in slide-in-from-left-2 duration-200"
-              >
-                <Badge variant="outline" className="font-semibold min-w-[2.5rem] justify-center">
-                  {note.note}
-                </Badge>
-                <span className="text-sm text-muted-foreground flex-1">
-                  {formatDuration(note.totalDurationMs)}
-                </span>
-                {note.count > 1 && (
-                  <span className="text-xs text-muted-foreground opacity-60">
-                    ×{note.count}
-                  </span>
-                )}
-              </div>
-            ))}
+    <ScrollArea className="w-full h-full" orientation="horizontal">
+      <div className="flex gap-4 h-full items-center px-4 py-2 min-w-max">
+        {aggregatedNotes.map((note) => (
+          <div
+            key={note.note}
+            className="flex-shrink-0 flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-xl p-4 min-w-[100px] hover:bg-white/10 transition-colors shadow-lg"
+          >
+            <Badge variant="outline" className="text-2xl font-bold text-white mb-2 border-0 bg-transparent p-0 hover:bg-transparent">
+              {note.note}
+            </Badge>
+            <span className="text-xs text-neutral-300 font-mono mb-3">
+              {formatDuration(note.totalDurationMs)}
+            </span>
+            <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(100, (note.count / 5) * 100)}%` }} />
+            </div>
           </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+        ))}
+      </div>
+    </ScrollArea>
   );
 }
