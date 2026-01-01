@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
-import { createPitchDetector, type PitchDetector } from '@/utils/pitchDetection';
+import { createPitchDetector, type PitchDetector, type DetectedNote } from '@/utils/pitchDetection';
+import { analyzeKeyWithDuration } from '@/utils/keyDetection';
 
 interface AudioCaptureState {
   isCapturing: boolean;
@@ -14,6 +15,7 @@ interface AudioCaptureReturn extends AudioCaptureState {
 /**
  * Custom hook for capturing live audio data from the user's microphone.
  * Uses Web Audio API to process audio and detects pitch using YIN algorithm.
+ * Collects notes with duration during capture and analyzes key when stopped.
  */
 export function useAudioCapture(): AudioCaptureReturn {
   const [state, setState] = useState<AudioCaptureState>({
@@ -29,9 +31,23 @@ export function useAudioCapture(): AudioCaptureReturn {
   const animationFrameRef = useRef<number | null>(null);
   const pitchDetectorRef = useRef<PitchDetector | null>(null);
 
+  // Ref to collect detected notes WITH DURATION during capture
+  const collectedNotesRef = useRef<DetectedNote[]>([]);
+
   /**
-   * Continuously reads time-domain audio data from the AnalyserNode,
-   * performs pitch detection, and logs stable notes to console.
+   * Callback when a note completes (with duration info).
+   * This is triggered by the pitch detector when a note ends.
+   */
+  const handleNoteComplete = useCallback((note: DetectedNote) => {
+    collectedNotesRef.current.push(note);
+    console.log(
+      `[TrueKey Pitch] Note completed: ${note.noteName} | Duration: ${note.durationMs}ms | Freq: ${note.frequency.toFixed(1)} Hz`
+    );
+  }, []);
+
+  /**
+   * Continuously reads time-domain audio data from the AnalyserNode
+   * and performs pitch detection.
    */
   const readAudioData = useCallback(() => {
     if (!analyserNodeRef.current || !pitchDetectorRef.current) return;
@@ -48,12 +64,13 @@ export function useAudioCapture(): AudioCaptureReturn {
       analyser.getFloatTimeDomainData(dataArray);
 
       // Process audio buffer for pitch detection
+      // Note: The pitch detector will call handleNoteComplete when notes end
       const result = pitchDetector.process(dataArray);
 
-      // Log detected stable notes
+      // Log when a new note starts (for real-time feedback)
       if (result) {
         console.log(
-          `[TrueKey Pitch] Detected note: ${result.noteName} (${result.frequency.toFixed(1)} Hz, ${result.cents >= 0 ? '+' : ''}${result.cents} cents)`
+          `[TrueKey Pitch] Note started: ${result.noteName} (${result.frequency.toFixed(1)} Hz)`
         );
       }
 
@@ -66,12 +83,62 @@ export function useAudioCapture(): AudioCaptureReturn {
   }, []);
 
   /**
+   * Analyzes collected notes (with duration) and logs the detected key, mode, and scale.
+   * Shows both primary and alternative (relative) keys when scores are close.
+   * Called only when recording stops.
+   */
+  const analyzeCollectedNotes = useCallback(() => {
+    const notes = collectedNotesRef.current;
+
+    if (notes.length === 0) {
+      console.log('[TrueKey] No notes detected during recording.');
+      return;
+    }
+
+    // Log summary of collected notes
+    const totalDuration = notes.reduce((sum, n) => sum + n.durationMs, 0);
+    console.log(`[TrueKey] Analyzing ${notes.length} notes (total duration: ${(totalDuration / 1000).toFixed(1)}s)...`);
+
+    // Run key analysis with duration weighting
+    const result = analyzeKeyWithDuration(notes);
+
+    if (!result) {
+      console.log('[TrueKey] Could not determine key (insufficient data).');
+      return;
+    }
+
+    const { primary, alternative, isAmbiguous } = result;
+
+    // Log primary key
+    console.log(
+      `[TrueKey] Detected key: ${primary.key} ${primary.mode} (confidence: ${Math.round(primary.confidence * 100)}%)`
+    );
+    console.log(`[TrueKey] Scale notes: ${primary.scaleNotes.join(' – ')}`);
+
+    // Log alternative key if exists (relative major/minor)
+    if (alternative) {
+      if (isAmbiguous) {
+        console.log('[TrueKey] ⚠️ Ambiguous result - could also be:');
+      } else {
+        console.log('[TrueKey] Alternative (relative key):');
+      }
+      console.log(
+        `[TrueKey] → ${alternative.key} ${alternative.mode} (confidence: ${Math.round(alternative.confidence * 100)}%)`
+      );
+      console.log(`[TrueKey] → Scale notes: ${alternative.scaleNotes.join(' – ')}`);
+    }
+  }, []);
+
+  /**
    * Starts capturing audio from the microphone.
    * Sets up AudioContext, MediaStreamAudioSourceNode, and AnalyserNode.
    */
   const startCapture = useCallback(async () => {
     // Reset any previous error
     setState((prev) => ({ ...prev, error: null }));
+
+    // Clear previously collected notes
+    collectedNotesRef.current = [];
 
     try {
       // Step 1: Request microphone permission
@@ -86,10 +153,14 @@ export function useAudioCapture(): AudioCaptureReturn {
       audioContextRef.current = audioContext;
 
       // Step 2.5: Initialize pitch detector with the correct sample rate
-      pitchDetectorRef.current = createPitchDetector({
+      const pitchDetector = createPitchDetector({
         sampleRate: audioContext.sampleRate,
         bufferSize: 2048,
       });
+
+      // Set up callback for when notes complete (with duration)
+      pitchDetector.setOnNoteComplete(handleNoteComplete);
+      pitchDetectorRef.current = pitchDetector;
 
       // Step 3: Create MediaStreamAudioSourceNode from the stream
       const sourceNode = audioContext.createMediaStreamSource(stream);
@@ -138,10 +209,10 @@ export function useAudioCapture(): AudioCaptureReturn {
       console.error('[TrueKey Audio] Error:', errorMessage);
       setState({ isCapturing: false, error: errorMessage });
     }
-  }, [readAudioData]);
+  }, [readAudioData, handleNoteComplete]);
 
   /**
-   * Stops audio capture and cleans up all audio resources.
+   * Stops audio capture, analyzes collected notes, and cleans up resources.
    */
   const stopCapture = useCallback(() => {
     console.log('[TrueKey Audio] Stopping audio capture...');
@@ -152,8 +223,9 @@ export function useAudioCapture(): AudioCaptureReturn {
       animationFrameRef.current = null;
     }
 
-    // Reset pitch detector
+    // Flush the pitch detector to get the last note's duration
     if (pitchDetectorRef.current) {
+      pitchDetectorRef.current.flush();
       pitchDetectorRef.current.reset();
       pitchDetectorRef.current = null;
     }
@@ -179,14 +251,16 @@ export function useAudioCapture(): AudioCaptureReturn {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => {
         track.stop();
-        console.log('[TrueKey Audio] Media track stopped:', track.kind);
       });
       mediaStreamRef.current = null;
     }
 
+    // Analyze collected notes and determine key (ONLY on stop)
+    analyzeCollectedNotes();
+
     setState({ isCapturing: false, error: null });
     console.log('[TrueKey Audio] Audio capture stopped and resources cleaned up.');
-  }, []);
+  }, [analyzeCollectedNotes]);
 
   return {
     isCapturing: state.isCapturing,
