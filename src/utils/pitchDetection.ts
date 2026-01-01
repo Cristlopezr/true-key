@@ -167,10 +167,8 @@ export function createPitchDetector(config: PitchDetectorConfig) {
         finalizeCurrentNote();
       }
 
-      // Reset ALL stability tracking on silence
-      // This allows the same note to be re-detected after silence
+      // Reset stability tracking on silence (but keep lastStableNote so UI stays stable)
       lastDetectedNote = null;
-      lastStableNote = null;
       consecutiveCount = 0;
       return null;
     }

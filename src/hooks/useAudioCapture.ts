@@ -37,9 +37,13 @@ export function useAudioCapture(): AudioCaptureReturn {
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const pitchDetectorRef = useRef<PitchDetector | null>(null);
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ref to collect detected notes WITH DURATION during capture
   const collectedNotesRef = useRef<DetectedNote[]>([]);
+
+  // Duration in ms before clearing the note from UI on silence
+  const SILENCE_CLEAR_DELAY_MS = 750;
 
   /**
    * Callback when a note completes (with duration info).
@@ -47,12 +51,19 @@ export function useAudioCapture(): AudioCaptureReturn {
    */
   const handleNoteComplete = useCallback((note: DetectedNote) => {
     collectedNotesRef.current.push(note);
-    // Update detectedNotes state for UI and clear currentNote since the note ended
+    // Update detectedNotes state for UI (keep currentNote visible)
     setState((prev) => ({
       ...prev,
       detectedNotes: [...prev.detectedNotes, note],
-      currentNote: null,
     }));
+
+    // Start timeout to clear currentNote after prolonged silence
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+    }
+    silenceTimeoutRef.current = setTimeout(() => {
+      setState((prev) => (prev.currentNote ? { ...prev, currentNote: null } : prev));
+    }, SILENCE_CLEAR_DELAY_MS);
   }, []);
 
   /**
@@ -79,6 +90,11 @@ export function useAudioCapture(): AudioCaptureReturn {
 
       // Update currentNote state for real-time UI feedback
       if (result) {
+        // Clear any pending silence timeout since we have a valid note
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
         setState((prev) => ({ ...prev, currentNote: result }));
       }
 
@@ -223,6 +239,12 @@ export function useAudioCapture(): AudioCaptureReturn {
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
+    }
+
+    // Cancel silence timeout
+    if (silenceTimeoutRef.current !== null) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
     }
 
     // Flush the pitch detector to get the last note's duration
