@@ -1,6 +1,4 @@
 import { type KeyAnalysisResult } from '@/utils/keyDetection';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface KeyResultProps {
