@@ -7,8 +7,8 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 const A4_FREQUENCY = 440;
 const A4_MIDI_NUMBER = 69;
 
-// RMS threshold for silence filtering (adjust as needed for sensitivity)
-const RMS_THRESHOLD = 0.01;
+// RMS threshold for silence filtering (higher = less sensitive to noise)
+const RMS_THRESHOLD = 0.02;
 
 // Number of consecutive detections required for note stability
 const STABILITY_THRESHOLD = 3;
@@ -63,7 +63,8 @@ export function createPitchDetector(config: PitchDetectorConfig) {
   const { sampleRate, bufferSize: _bufferSize = 2048 } = config;
 
   // Initialize YIN detector - good for voice/monophonic signals
-  const detectPitch = YIN({ sampleRate, threshold: 0.1 });
+  // Threshold 0.15 reduces octave errors for voice detection
+  const detectPitch = YIN({ sampleRate, threshold: 0.15 });
 
   // State for note stability tracking
   let lastDetectedNote: string | null = null;

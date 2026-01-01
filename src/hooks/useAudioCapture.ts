@@ -169,7 +169,9 @@ export function useAudioCapture(): AudioCaptureReturn {
       // Step 4: Create AnalyserNode for reading audio data
       const analyserNode = audioContext.createAnalyser();
       analyserNode.fftSize = 2048; // Buffer size for time-domain data
-      analyserNode.smoothingTimeConstant = 0.8;
+      // smoothingTimeConstant = 0 for raw data (no temporal blur between frames)
+      // This is critical for accurate pitch detection
+      analyserNode.smoothingTimeConstant = 0;
       analyserNodeRef.current = analyserNode;
 
       // Step 5: Connect source -> analyser

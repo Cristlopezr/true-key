@@ -15,9 +15,13 @@ const PITCH_CLASSES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#
 type PitchClass = (typeof PITCH_CLASSES)[number];
 
 // Scale templates as semitone intervals from root
+// Includes common modes found in pop, rock, and jazz
 const SCALE_TEMPLATES = {
-  major: [0, 2, 4, 5, 7, 9, 11],
-  minor: [0, 2, 3, 5, 7, 8, 10], // Natural minor
+  major: [0, 2, 4, 5, 7, 9, 11],           // Ionian - most common major
+  minor: [0, 2, 3, 5, 7, 8, 10],           // Natural minor (Aeolian)
+  harmonicMinor: [0, 2, 3, 5, 7, 8, 11],   // Raised 7th - classical/metal
+  dorian: [0, 2, 3, 5, 7, 9, 10],          // Minor with raised 6th - pop/rock/jazz
+  mixolydian: [0, 2, 4, 5, 7, 9, 10],      // Major with lowered 7th - rock/blues
 } as const;
 
 type Mode = keyof typeof SCALE_TEMPLATES;
@@ -171,8 +175,14 @@ function scoreKeyImproved(
   
   // Get important scale degrees
   const fifth = PITCH_CLASSES[(rootIndex + 7) % 12];
-  const third = PITCH_CLASSES[(rootIndex + (mode === 'major' ? 4 : 3)) % 12];
-  const leadingTone = PITCH_CLASSES[(rootIndex + 11) % 12]; // 7th degree
+  
+  // Third degree: major modes use major 3rd (4 semitones), minor modes use minor 3rd (3 semitones)
+  const isMajorMode = mode === 'major' || mode === 'mixolydian';
+  const third = PITCH_CLASSES[(rootIndex + (isMajorMode ? 4 : 3)) % 12];
+  
+  // Leading tone (7th degree) - different for each mode
+  const leadingToneInterval = SCALE_TEMPLATES[mode][6]; // 7th degree of the scale
+  const leadingTone = PITCH_CLASSES[(rootIndex + leadingToneInterval) % 12];
 
   let score = 0;
   let inScaleNotes = 0;
@@ -364,8 +374,14 @@ function scoreKeyWithDuration(
   
   // Get important scale degrees
   const fifth = PITCH_CLASSES[(rootIndex + 7) % 12];
-  const third = PITCH_CLASSES[(rootIndex + (mode === 'major' ? 4 : 3)) % 12];
-  const leadingTone = PITCH_CLASSES[(rootIndex + 11) % 12];
+  
+  // Third degree: major modes use major 3rd (4 semitones), minor modes use minor 3rd (3 semitones)
+  const isMajorMode = mode === 'major' || mode === 'mixolydian';
+  const third = PITCH_CLASSES[(rootIndex + (isMajorMode ? 4 : 3)) % 12];
+  
+  // Leading tone (7th degree) - different for each mode
+  const leadingToneInterval = SCALE_TEMPLATES[mode][6];
+  const leadingTone = PITCH_CLASSES[(rootIndex + leadingToneInterval) % 12];
 
   let score = 0;
   let inScaleDuration = 0;
