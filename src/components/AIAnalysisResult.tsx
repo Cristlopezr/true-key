@@ -48,6 +48,40 @@ export function AIAnalysisResult({ result, isLoading, error }: AIAnalysisResultP
 
   // Error state
   if (error) {
+    // Check if it's a rate limit error
+    const isRateLimitError = error.toLowerCase().includes('rate limit') || 
+                              error.toLowerCase().includes('24 hours')
+    
+    if (isRateLimitError) {
+      return (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-500/10 flex items-center justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-amber-400"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <p className="text-amber-300 font-semibold text-lg">Rate Limit Reached</p>
+          <p className="text-amber-200/80 text-base mt-2 max-w-md mx-auto">{error}</p>
+          <p className="text-amber-400/60 text-sm mt-4">
+            AI analysis is limited to help manage costs. Thank you for understanding!
+          </p>
+        </div>
+      );
+    }
+
+    // Generic error
     return (
       <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
         <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">

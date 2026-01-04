@@ -19,6 +19,7 @@ export function AudioCapture() {
         isAnalyzingAI,
         aiAnalysisResult,
         aiAnalysisError,
+        isRateLimited,
         startCapture,
         stopCapture,
         analyzeWithAI,
@@ -55,17 +56,33 @@ export function AudioCapture() {
                         <Button
                             onClick={analyzeWithAI}
                             size="default"
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-0 shadow-lg shadow-emerald-500/20 font-semibold"
+                            disabled={isRateLimited}
+                            className={isRateLimited 
+                                ? "bg-neutral-700 text-neutral-400 border-0 cursor-not-allowed opacity-60" 
+                                : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-0 shadow-lg shadow-emerald-500/20 font-semibold"
+                            }
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                                <path d="M12 8V4H8" />
-                                <rect width="16" height="12" x="4" y="8" rx="2" />
-                                <path d="M2 14h2" />
-                                <path d="M20 14h2" />
-                                <path d="M15 13v2" />
-                                <path d="M9 13v2" />
-                            </svg>
-                            Analyze with AI
+                            {isRateLimited ? (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" />
+                                    </svg>
+                                    Rate Limited
+                                </>
+                            ) : (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                                        <path d="M12 8V4H8" />
+                                        <rect width="16" height="12" x="4" y="8" rx="2" />
+                                        <path d="M2 14h2" />
+                                        <path d="M20 14h2" />
+                                        <path d="M15 13v2" />
+                                        <path d="M9 13v2" />
+                                    </svg>
+                                    Analyze with AI
+                                </>
+                            )}
                         </Button>
                     )}
                     {isAnalyzingAI && (

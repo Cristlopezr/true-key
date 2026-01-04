@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { createPitchDetector, type PitchDetector, type DetectedNote, type PitchResult } from '@/utils/pitchDetection';
 import { analyzeKeyWithDuration, type KeyAnalysisResult } from '@/utils/keyDetection';
-import { analyzeKeyWithAI } from '@/services/api';
+import { analyzeKeyWithAI, RateLimitError } from '@/services/api';
 import type { AIAnalysisResponse, NoteData } from '@/types/aiAnalysis';
 
 interface AudioCaptureState {
@@ -14,6 +14,7 @@ interface AudioCaptureState {
   isAnalyzingAI: boolean;
   aiAnalysisResult: AIAnalysisResponse | null;
   aiAnalysisError: string | null;
+  isRateLimited: boolean;
 }
 
 interface AudioCaptureReturn extends AudioCaptureState {
@@ -37,6 +38,7 @@ export function useAudioCapture(): AudioCaptureReturn {
     isAnalyzingAI: false,
     aiAnalysisResult: null,
     aiAnalysisError: null,
+    isRateLimited: false,
   });
 
   // Refs to persist audio nodes across renders
@@ -145,8 +147,8 @@ export function useAudioCapture(): AudioCaptureReturn {
    * Sets up AudioContext, MediaStreamAudioSourceNode, and AnalyserNode.
    */
   const startCapture = useCallback(async () => {
-    // Reset state for new capture session
-    setState({
+    // Reset state for new capture session (preserve rate limit state)
+    setState((prev) => ({
       isCapturing: false,
       error: null,
       currentNote: null,
@@ -155,7 +157,8 @@ export function useAudioCapture(): AudioCaptureReturn {
       isAnalyzingAI: false,
       aiAnalysisResult: null,
       aiAnalysisError: null,
-    });
+      isRateLimited: prev.isRateLimited, // Preserve rate limit state
+    }));
 
     // Clear previously collected notes
     collectedNotesRef.current = [];
@@ -342,11 +345,6 @@ export function useAudioCapture(): AudioCaptureReturn {
       // Get unique notes count
       const uniqueNotes = new Set(notes.map((n) => n.note));
 
-      console.log('[TrueKey AI] Sending analysis request...');
-      console.log('[TrueKey AI] Notes:', noteData.length);
-      console.log('[TrueKey AI] Total duration:', totalDurationMs, 'ms');
-      console.log('[TrueKey AI] Unique notes:', uniqueNotes.size);
-
       const result = await analyzeKeyWithAI({
         notes: noteData,
         totalDurationMs,
@@ -358,14 +356,17 @@ export function useAudioCapture(): AudioCaptureReturn {
         isAnalyzingAI: false,
         aiAnalysisResult: result,
       }));
-
-      console.log('[TrueKey AI] Analysis complete:', result);
     } catch (error) {
       console.error('[TrueKey AI] Analysis failed:', error);
+      
+      // Check if it's a rate limit error
+      const isRateLimit = error instanceof RateLimitError;
+      
       setState((prev) => ({
         ...prev,
         isAnalyzingAI: false,
         aiAnalysisError: error instanceof Error ? error.message : 'AI analysis failed',
+        isRateLimited: isRateLimit ? true : prev.isRateLimited,
       }));
     }
   }, [state.detectedNotes]);
@@ -379,6 +380,7 @@ export function useAudioCapture(): AudioCaptureReturn {
     isAnalyzingAI: state.isAnalyzingAI,
     aiAnalysisResult: state.aiAnalysisResult,
     aiAnalysisError: state.aiAnalysisError,
+    isRateLimited: state.isRateLimited,
     startCapture,
     stopCapture,
     analyzeWithAI,

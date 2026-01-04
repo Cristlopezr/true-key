@@ -17,24 +17,29 @@ function getBaseUrl(): string {
 }
 
 /**
+ * Custom error class for rate limit errors
+ */
+export class RateLimitError extends Error {
+  retryAfterMs: number;
+  
+  constructor(message: string, retryAfterMs: number) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+/**
  * Sends note data to the backend for AI-powered key detection and chord progression recommendations.
  * 
  * @param data - The analysis request containing notes with durations and order
  * @returns The AI analysis response with key detection and chord recommendations
  * @throws Error if the request fails or backend returns an error
+ * @throws RateLimitError if rate limit is exceeded (429)
  */
 export async function analyzeKeyWithAI(data: AIAnalysisRequest): Promise<AIAnalysisResponse> {
   const baseUrl = getBaseUrl();
   const endpoint = `${baseUrl}/analyze-key`;
-
-  console.log('[TrueKey API] Sending analysis request to:', endpoint);
-  console.log('[TrueKey API] Payload:', {
-    notesCount: data.notes.length,
-    totalDurationMs: data.totalDurationMs,
-    uniqueNotesCount: data.uniqueNotesCount,
-  });
-
-  console.log({data})
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -45,13 +50,30 @@ export async function analyzeKeyWithAI(data: AIAnalysisRequest): Promise<AIAnaly
   });
 
   if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unknown error');
-    console.error('[TrueKey API] Error response:', response.status, errorText);
-    throw new Error(`AI analysis failed: ${response.status} - ${errorText}`);
+    // Try to parse as JSON first for structured error responses
+    let errorData: { error?: string; message?: string; retryAfterMs?: number } | null = null;
+    
+    try {
+      errorData = await response.json();
+    } catch {
+      // Not JSON, will fall back to text
+    }
+
+    // Handle rate limit error (429)
+    if (response.status === 429 && errorData) {
+      console.warn('[TrueKey API] Rate limit exceeded:', errorData.message);
+      throw new RateLimitError(
+        errorData.message || 'Rate limit exceeded. Please try again later.',
+        errorData.retryAfterMs || 24 * 60 * 60 * 1000 // Default to 24 hours
+      );
+    }
+
+    // Handle other errors
+    const errorMessage = errorData?.message || errorData?.error || 'Unknown error';
+    console.error('[TrueKey API] Error response:', response.status, errorMessage);
+    throw new Error(`AI analysis failed: ${errorMessage}`);
   }
 
   const result: AIAnalysisResponse = await response.json();
-  console.log('[TrueKey API] Analysis complete:', result.key);
-
   return result;
 }
