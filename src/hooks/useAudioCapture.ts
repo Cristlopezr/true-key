@@ -1,6 +1,8 @@
 import { useRef, useState, useCallback } from 'react';
 import { createPitchDetector, type PitchDetector, type DetectedNote, type PitchResult } from '@/utils/pitchDetection';
 import { analyzeKeyWithDuration, type KeyAnalysisResult } from '@/utils/keyDetection';
+import { analyzeKeyWithAI } from '@/services/api';
+import type { AIAnalysisResponse, NoteData } from '@/types/aiAnalysis';
 
 interface AudioCaptureState {
   isCapturing: boolean;
@@ -8,11 +10,16 @@ interface AudioCaptureState {
   currentNote: PitchResult | null;
   detectedNotes: DetectedNote[];
   keyResult: KeyAnalysisResult | null;
+  // AI Analysis states
+  isAnalyzingAI: boolean;
+  aiAnalysisResult: AIAnalysisResponse | null;
+  aiAnalysisError: string | null;
 }
 
 interface AudioCaptureReturn extends AudioCaptureState {
   startCapture: () => Promise<void>;
   stopCapture: () => void;
+  analyzeWithAI: () => Promise<void>;
 }
 
 /**
@@ -27,6 +34,9 @@ export function useAudioCapture(): AudioCaptureReturn {
     currentNote: null,
     detectedNotes: [],
     keyResult: null,
+    isAnalyzingAI: false,
+    aiAnalysisResult: null,
+    aiAnalysisError: null,
   });
 
   // Refs to persist audio nodes across renders
@@ -142,6 +152,9 @@ export function useAudioCapture(): AudioCaptureReturn {
       currentNote: null,
       detectedNotes: [],
       keyResult: null,
+      isAnalyzingAI: false,
+      aiAnalysisResult: null,
+      aiAnalysisError: null,
     });
 
     // Clear previously collected notes
@@ -291,13 +304,83 @@ export function useAudioCapture(): AudioCaptureReturn {
     console.log('[TrueKey Audio] Audio capture stopped and resources cleaned up.');
   }, [analyzeCollectedNotes]);
 
+  /**
+   * Analyzes the detected notes using the AI backend.
+   * Sends note data with durations and order for key detection and chord recommendations.
+   */
+  const analyzeWithAI = useCallback(async () => {
+    const notes = state.detectedNotes;
+
+    if (notes.length === 0) {
+      setState((prev) => ({
+        ...prev,
+        aiAnalysisError: 'No notes to analyze. Please record some audio first.',
+      }));
+      return;
+    }
+
+    // Set loading state
+    setState((prev) => ({
+      ...prev,
+      isAnalyzingAI: true,
+      aiAnalysisError: null,
+    }));
+
+    try {
+      // Prepare note data for the AI
+      const noteData: NoteData[] = notes.map((note, index) => ({
+        noteName: note.noteName,
+        note: note.note,
+        octave: note.octave,
+        durationMs: note.durationMs,
+        order: index,
+      }));
+
+      // Calculate total duration
+      const totalDurationMs = notes.reduce((sum, note) => sum + note.durationMs, 0);
+
+      // Get unique notes count
+      const uniqueNotes = new Set(notes.map((n) => n.note));
+
+      console.log('[TrueKey AI] Sending analysis request...');
+      console.log('[TrueKey AI] Notes:', noteData.length);
+      console.log('[TrueKey AI] Total duration:', totalDurationMs, 'ms');
+      console.log('[TrueKey AI] Unique notes:', uniqueNotes.size);
+
+      const result = await analyzeKeyWithAI({
+        notes: noteData,
+        totalDurationMs,
+        uniqueNotesCount: uniqueNotes.size,
+      });
+
+      setState((prev) => ({
+        ...prev,
+        isAnalyzingAI: false,
+        aiAnalysisResult: result,
+      }));
+
+      console.log('[TrueKey AI] Analysis complete:', result);
+    } catch (error) {
+      console.error('[TrueKey AI] Analysis failed:', error);
+      setState((prev) => ({
+        ...prev,
+        isAnalyzingAI: false,
+        aiAnalysisError: error instanceof Error ? error.message : 'AI analysis failed',
+      }));
+    }
+  }, [state.detectedNotes]);
+
   return {
     isCapturing: state.isCapturing,
     error: state.error,
     currentNote: state.currentNote,
     detectedNotes: state.detectedNotes,
     keyResult: state.keyResult,
+    isAnalyzingAI: state.isAnalyzingAI,
+    aiAnalysisResult: state.aiAnalysisResult,
+    aiAnalysisError: state.aiAnalysisError,
     startCapture,
     stopCapture,
+    analyzeWithAI,
   };
 }
