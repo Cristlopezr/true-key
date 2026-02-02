@@ -33,8 +33,8 @@ interface ChordSVGProps {
 function ChordSVG({ chord, width, height }: ChordSVGProps) {
   const { frets, baseFret = 1, barres = [] } = chord;
   
-  // Dimensions
-  const padding = { top: 20, left: 15, right: 10, bottom: 10 };
+  // Dimensions - adjusted for name at bottom
+  const padding = { top: 15, left: 15, right: 10, bottom: 20 };
   const fretboardWidth = width - padding.left - padding.right;
   const fretboardHeight = height - padding.top - padding.bottom;
   const stringSpacing = fretboardWidth / 5; // 6 strings, 5 gaps
@@ -51,12 +51,12 @@ function ChordSVG({ chord, width, height }: ChordSVGProps) {
 
   return (
     <svg width={width} height={height} className="chord-diagram">
-      {/* Chord name */}
+      {/* Chord name at bottom */}
       <text
         x={width / 2}
-        y={12}
+        y={height - 4}
         textAnchor="middle"
-        className="fill-white font-bold text-sm"
+        className="fill-violet-300 font-bold text-sm"
       >
         {chord.name}
       </text>

@@ -1,6 +1,51 @@
-import type { AIAnalysisResponse } from '@/types/aiAnalysis';
+import type { AIAnalysisResponse, LyricLine } from '@/types/aiAnalysis';
 import { cn } from '@/lib/utils';
 import { HoverableChord } from './HoverableChord';
+
+/**
+ * Renders a lyric line with chords positioned above the correct words
+ */
+function LyricLineWithChords({ line }: { line: LyricLine }) {
+  // Find the position of each word in the text and map chords to positions
+  const chordPositions: Array<{ chord: string; position: number }> = [];
+  
+  for (const chordInfo of line.chords) {
+    // Find the word in the text (case-insensitive search for robustness)
+    const wordIndex = line.text.toLowerCase().indexOf(chordInfo.word.toLowerCase());
+    if (wordIndex !== -1) {
+      chordPositions.push({ chord: chordInfo.chord, position: wordIndex });
+    }
+  }
+  
+  // Sort by position
+  chordPositions.sort((a, b) => a.position - b.position);
+  
+  // Build the chord line with proper spacing
+  const chordElements: React.ReactNode[] = [];
+  let lastEnd = 0;
+  
+  chordPositions.forEach((cp, idx) => {
+    // Add spaces before this chord
+    const spacesNeeded = cp.position - lastEnd;
+    if (spacesNeeded > 0) {
+      chordElements.push(<span key={`space-${idx}`}>{' '.repeat(spacesNeeded)}</span>);
+    }
+    // Add the chord
+    chordElements.push(<HoverableChord key={`chord-${idx}`} chord={cp.chord} />);
+    lastEnd = cp.position + cp.chord.length;
+  });
+  
+  return (
+    <div>
+      {chordPositions.length > 0 && (
+        <div className="text-violet-400 font-bold whitespace-pre">
+          {chordElements}
+        </div>
+      )}
+      <div className="text-neutral-200">{line.text}</div>
+    </div>
+  );
+}
 
 interface AIAnalysisResultProps {
   result: AIAnalysisResponse | null;
@@ -174,12 +219,21 @@ export function AIAnalysisResult({ result, isLoading, error }: AIAnalysisResultP
             <span className="text-3xl font-black text-white tracking-tight">{result.key}</span>
           </div>
         </div>
-        {result.confidence > 0 && (
-          <div className="text-right">
-            <span className="text-3xl font-bold text-emerald-400">{Math.round(result.confidence * 100)}%</span>
-            <p className="text-xs text-emerald-400/70 uppercase">Match</p>
-          </div>
-        )}
+        <div className="flex items-center gap-6">
+          {result.tempo && (
+            <div className="text-right border-r border-white/10 pr-6">
+              <span className="text-2xl font-bold text-amber-400">{result.tempo.bpm}</span>
+              <span className="text-lg text-amber-400/70 ml-1">BPM</span>
+              <p className="text-xs text-amber-400/70 uppercase">{result.tempo.timeSignature}</p>
+            </div>
+          )}
+          {result.confidence > 0 && (
+            <div className="text-right">
+              <span className="text-3xl font-bold text-emerald-400">{Math.round(result.confidence * 100)}%</span>
+              <p className="text-xs text-emerald-400/70 uppercase">Match</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Analysis - Collapsible */}
@@ -283,32 +337,10 @@ export function AIAnalysisResult({ result, isLoading, error }: AIAnalysisResultP
             </svg>
             Lyrics with Chords
           </p>
-          <div className="font-mono text-sm leading-relaxed space-y-4 bg-black/20 rounded-lg p-4 overflow-x-auto">
-            {result.lyrics.map((line, lineIndex) => {
-              // Build chord elements with proper positioning
-              const sortedChords = [...line.chords].sort((a, b) => a.position - b.position);
-              
-              return (
-                <div key={lineIndex} className="whitespace-pre">
-                  {sortedChords.length > 0 && (
-                    <div className="text-violet-400 font-bold flex">
-                      {sortedChords.map((chordInfo, idx) => {
-                        // Calculate padding based on position
-                        const prevEnd = idx === 0 ? 0 : sortedChords[idx - 1].position + sortedChords[idx - 1].chord.length;
-                        const padding = Math.max(0, chordInfo.position - prevEnd);
-                        return (
-                          <span key={idx}>
-                            {' '.repeat(padding)}
-                            <HoverableChord chord={chordInfo.chord} />
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="text-neutral-200">{line.text}</div>
-                </div>
-              );
-            })}
+          <div className="font-mono text-sm leading-relaxed space-y-3 bg-black/20 rounded-lg p-4">
+            {result.lyrics.map((line, lineIndex) => (
+              <LyricLineWithChords key={lineIndex} line={line} />
+            ))}
           </div>
         </div>
       )}

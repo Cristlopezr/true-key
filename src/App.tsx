@@ -25,7 +25,34 @@ function App() {
 
         {/* Main Workspace */}
         <main className="flex-1 p-6 overflow-auto">
-             <AudioCapture />
+          {/* Hero Section */}
+          <div className="max-w-3xl mx-auto mb-8 text-center">
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
+              Find the Perfect Chords for Your Melody
+            </h2>
+            <p className="text-neutral-400 text-base md:text-lg leading-relaxed mb-4">
+              Perfect for <span className="text-indigo-400">beginner musicians</span> and <span className="text-rose-400">aspiring songwriters</span>. 
+              Sing or hum your melody to instantly detect the key and scale. 
+              Then, optionally <span className="text-amber-400">analyze with AI</span> to get chord progressions 
+              tailored to your melody, plus your lyrics showing exactly when to play each chord.
+            </p>
+            <div className="flex flex-wrap justify-center gap-4 text-sm text-neutral-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                No music theory needed
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                Works with singing or humming
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                Interactive guitar diagrams
+              </span>
+            </div>
+          </div>
+          
+          <AudioCapture />
         </main>
       </div>
     </div>

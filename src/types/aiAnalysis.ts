@@ -43,18 +43,30 @@ export interface ChordProgression {
 }
 
 /**
- * A line of lyrics with chord positioned above it
+ * A line of lyrics with chords positioned by word
  */
 export interface LyricLine {
   /** The lyrics text for this line */
   text: string;
-  /** Chords with their character position in the line */
+  /** Chords with the word they should appear above */
   chords: Array<{
     /** The chord name (e.g., "Am", "F", "C") */
     chord: string;
-    /** Character position where this chord should appear (0-indexed) */
-    position: number;
+    /** The word this chord should appear above */
+    word: string;
+    /** Beat number where this chord should be played (1, 2, 3, or 4 for 4/4 time) */
+    beat?: number;
   }>;
+}
+
+/**
+ * Tempo information estimated from the melody
+ */
+export interface TempoInfo {
+  /** Beats per minute */
+  bpm: number;
+  /** Time signature (e.g., "4/4", "3/4") */
+  timeSignature: string;
 }
 
 /**
@@ -65,6 +77,8 @@ export interface AIAnalysisResponse {
   key: string;
   /** Confidence level (0-1) */
   confidence: number;
+  /** Estimated tempo based on the melody (only if audio was provided) */
+  tempo?: TempoInfo;
   /** Recommended chord progressions based on the melody */
   chordProgressions: ChordProgression[];
   /** General analysis/explanation from the AI */
