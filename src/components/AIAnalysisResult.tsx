@@ -1,5 +1,6 @@
 import type { AIAnalysisResponse } from '@/types/aiAnalysis';
 import { cn } from '@/lib/utils';
+import { HoverableChord } from './HoverableChord';
 
 interface AIAnalysisResultProps {
   result: AIAnalysisResponse | null;
@@ -243,7 +244,7 @@ export function AIAnalysisResult({ result, isLoading, error }: AIAnalysisResultP
                           : 'bg-white/10 text-neutral-200 border-white/10'
                       )}
                     >
-                      {chord}
+                      <HoverableChord chord={chord} />
                     </div>
                   ))}
                 </div>
@@ -257,6 +258,57 @@ export function AIAnalysisResult({ result, isLoading, error }: AIAnalysisResultP
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lyrics with Chords */}
+      {result.lyrics && result.lyrics.length > 0 && (
+        <div className="bg-gradient-to-r from-violet-900/20 to-purple-900/20 rounded-xl border border-violet-500/20 p-5">
+          <p className="text-sm font-bold text-violet-300 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 18V5l12-2v13"/>
+              <circle cx="6" cy="18" r="3"/>
+              <circle cx="18" cy="16" r="3"/>
+            </svg>
+            Lyrics with Chords
+          </p>
+          <div className="font-mono text-sm leading-relaxed space-y-4 bg-black/20 rounded-lg p-4 overflow-x-auto">
+            {result.lyrics.map((line, lineIndex) => {
+              // Build chord elements with proper positioning
+              const sortedChords = [...line.chords].sort((a, b) => a.position - b.position);
+              
+              return (
+                <div key={lineIndex} className="whitespace-pre">
+                  {sortedChords.length > 0 && (
+                    <div className="text-violet-400 font-bold flex">
+                      {sortedChords.map((chordInfo, idx) => {
+                        // Calculate padding based on position
+                        const prevEnd = idx === 0 ? 0 : sortedChords[idx - 1].position + sortedChords[idx - 1].chord.length;
+                        const padding = Math.max(0, chordInfo.position - prevEnd);
+                        return (
+                          <span key={idx}>
+                            {' '.repeat(padding)}
+                            <HoverableChord chord={chordInfo.chord} />
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="text-neutral-200">{line.text}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -31,23 +31,43 @@ export class RateLimitError extends Error {
 
 /**
  * Sends note data to the backend for AI-powered key detection and chord progression recommendations.
+ * Optionally includes audio for lyrics transcription.
  * 
  * @param data - The analysis request containing notes with durations and order
- * @returns The AI analysis response with key detection and chord recommendations
+ * @param audio - Optional audio blob for lyrics transcription
+ * @returns The AI analysis response with key detection, chord recommendations, and optionally lyrics
  * @throws Error if the request fails or backend returns an error
  * @throws RateLimitError if rate limit is exceeded (429)
  */
-export async function analyzeKeyWithAI(data: AIAnalysisRequest): Promise<AIAnalysisResponse> {
+export async function analyzeKeyWithAI(
+  data: AIAnalysisRequest,
+  audio?: Blob
+): Promise<AIAnalysisResponse> {
   const baseUrl = getBaseUrl();
   const endpoint = `${baseUrl}/analyze-key`;
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
+  let response: Response;
+
+  if (audio) {
+    // Send as FormData when audio is included
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(data));
+    formData.append('audio', audio, 'recording.webm');
+
+    response = await fetch(endpoint, {
+      method: 'POST',
+      body: formData,
+    });
+  } else {
+    // Send as JSON when no audio (backwards compatible)
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+  }
 
   if (!response.ok) {
     // Try to parse as JSON first for structured error responses

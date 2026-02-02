@@ -27,6 +27,7 @@ interface AudioCaptureReturn extends AudioCaptureState {
  * Custom hook for capturing live audio data from the user's microphone.
  * Uses Web Audio API to process audio and detects pitch using YIN algorithm.
  * Collects notes with duration during capture and analyzes key when stopped.
+ * Also records audio for optional AI transcription.
  */
 export function useAudioCapture(): AudioCaptureReturn {
   const [state, setState] = useState<AudioCaptureState>({
@@ -50,6 +51,11 @@ export function useAudioCapture(): AudioCaptureReturn {
   const animationFrameRef = useRef<number | null>(null);
   const pitchDetectorRef = useRef<PitchDetector | null>(null);
   const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // MediaRecorder refs for audio recording
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordedAudioRef = useRef<Blob | null>(null);
 
   // Ref to collect detected notes WITH DURATION during capture
   const collectedNotesRef = useRef<DetectedNote[]>([]);
@@ -162,6 +168,10 @@ export function useAudioCapture(): AudioCaptureReturn {
 
     // Clear previously collected notes
     collectedNotesRef.current = [];
+    
+    // Clear previous audio recording
+    audioChunksRef.current = [];
+    recordedAudioRef.current = null;
 
     try {
       // Step 1: Request microphone permission
@@ -214,6 +224,28 @@ export function useAudioCapture(): AudioCaptureReturn {
 
       // Step 7: Start reading audio data
       readAudioData();
+      
+      // Step 8: Start recording audio with MediaRecorder
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        // Combine all chunks into a single Blob
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        recordedAudioRef.current = audioBlob;
+        console.log('[TrueKey Audio] Recording saved, size:', audioBlob.size, 'bytes');
+      };
+      
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      
       console.log('[TrueKey Audio] Started capturing audio data...');
     } catch (err) {
       // Handle permission errors gracefully
@@ -268,6 +300,12 @@ export function useAudioCapture(): AudioCaptureReturn {
       pitchDetectorRef.current.flush();
       pitchDetectorRef.current.reset();
       pitchDetectorRef.current = null;
+    }
+    
+    // Stop MediaRecorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
     }
 
     // Disconnect and close audio nodes
@@ -349,7 +387,7 @@ export function useAudioCapture(): AudioCaptureReturn {
         notes: noteData,
         totalDurationMs,
         uniqueNotesCount: uniqueNotes.size,
-      });
+      }, recordedAudioRef.current || undefined);
 
       setState((prev) => ({
         ...prev,

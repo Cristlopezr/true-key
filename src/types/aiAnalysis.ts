@@ -43,6 +43,21 @@ export interface ChordProgression {
 }
 
 /**
+ * A line of lyrics with chord positioned above it
+ */
+export interface LyricLine {
+  /** The lyrics text for this line */
+  text: string;
+  /** Chords with their character position in the line */
+  chords: Array<{
+    /** The chord name (e.g., "Am", "F", "C") */
+    chord: string;
+    /** Character position where this chord should appear (0-indexed) */
+    position: number;
+  }>;
+}
+
+/**
  * Response from the AI analysis endpoint
  */
 export interface AIAnalysisResponse {
@@ -56,4 +71,6 @@ export interface AIAnalysisResponse {
   analysis: string;
   /** Any additional suggestions or tips */
   suggestions?: string[];
+  /** Transcribed lyrics with chord positions (only if audio was provided) */
+  lyrics?: LyricLine[];
 }
