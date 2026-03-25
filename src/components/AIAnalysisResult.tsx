@@ -87,7 +87,7 @@ export function AIAnalysisResult({ result, isLoading, error }: AIAnalysisResultP
           </div>
         </div>
         <p className="text-neutral-300 mt-4 font-medium text-lg">Analyzing with AI...</p>
-        <p className="text-neutral-500 text-base mt-1">This may take a few seconds</p>
+        <p className="text-neutral-500 text-base mt-1">This may take several minutes</p>
       </div>
     );
   }
