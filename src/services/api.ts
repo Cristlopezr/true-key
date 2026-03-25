@@ -94,6 +94,99 @@ export async function analyzeKeyWithAI(
     throw new Error(`AI analysis failed: ${errorMessage}`);
   }
 
-  const result: AIAnalysisResponse = await response.json();
-  return result;
+  const result = await response.json();
+  return sanitizeResponse(result);
+}
+
+/**
+ * Sanitizes the AI response on the frontend as a safety net.
+ * Ensures no unexpected types reach React components (prevents Error #31).
+ */
+function sanitizeResponse(raw: Record<string, unknown>): AIAnalysisResponse {
+  const key = typeof raw.key === 'string' ? raw.key : 'Unknown';
+
+  let confidence = typeof raw.confidence === 'number' ? raw.confidence : 0;
+  if (confidence < 0) confidence = 0;
+  if (confidence > 1) confidence = 1;
+
+  const analysis = typeof raw.analysis === 'string' ? raw.analysis : '';
+
+  // Tempo
+  let tempo: AIAnalysisResponse['tempo'] = undefined;
+  if (raw.tempo && typeof raw.tempo === 'object') {
+    const t = raw.tempo as Record<string, unknown>;
+    const bpm = typeof t.bpm === 'number' ? t.bpm : 0;
+    const timeSignature = typeof t.timeSignature === 'string' ? t.timeSignature : '4/4';
+    if (bpm > 0) tempo = { bpm, timeSignature };
+  }
+
+  // Chord progressions — normalize chords to plain strings
+  const chordProgressions: AIAnalysisResponse['chordProgressions'] = [];
+  if (Array.isArray(raw.chordProgressions)) {
+    for (const prog of raw.chordProgressions) {
+      if (!prog || typeof prog !== 'object') continue;
+      const p = prog as Record<string, unknown>;
+      const name = typeof p.name === 'string' ? p.name : 'Progression';
+      const explanation = typeof p.explanation === 'string' ? p.explanation : '';
+      let chords: string[] = [];
+      if (Array.isArray(p.chords)) {
+        chords = p.chords
+          .map((c: unknown) => {
+            if (typeof c === 'string') return c;
+            if (c && typeof c === 'object' && 'chord' in c) {
+              const val = (c as Record<string, unknown>).chord;
+              return typeof val === 'string' ? val : null;
+            }
+            return null;
+          })
+          .filter((c): c is string => c !== null);
+      }
+      if (chords.length > 0) chordProgressions.push({ name, chords, explanation });
+    }
+  }
+
+  // Suggestions — filter to strings only
+  let suggestions: string[] | undefined = undefined;
+  if (Array.isArray(raw.suggestions)) {
+    const filtered = raw.suggestions.filter((s: unknown): s is string => typeof s === 'string');
+    if (filtered.length > 0) suggestions = filtered;
+  }
+
+  // Lyrics — validate each line has text and proper chord objects
+  let lyrics: AIAnalysisResponse['lyrics'] = undefined;
+  if (Array.isArray(raw.lyrics) && raw.lyrics.length > 0) {
+    const sanitized: NonNullable<AIAnalysisResponse['lyrics']> = [];
+    for (const line of raw.lyrics) {
+      if (!line || typeof line !== 'object') continue;
+      const l = line as Record<string, unknown>;
+      const text = typeof l.text === 'string' ? l.text : '';
+      if (!text) continue;
+      const lineChords: Array<{ chord: string; word: string; beat?: number }> = [];
+      if (Array.isArray(l.chords)) {
+        for (const c of l.chords) {
+          if (!c || typeof c !== 'object') continue;
+          const obj = c as Record<string, unknown>;
+          const chord = typeof obj.chord === 'string' ? obj.chord : '';
+          const word = typeof obj.word === 'string' ? obj.word : '';
+          if (chord && word) {
+            const entry: { chord: string; word: string; beat?: number } = { chord, word };
+            if (typeof obj.beat === 'number') entry.beat = obj.beat;
+            lineChords.push(entry);
+          }
+        }
+      }
+      sanitized.push({ text, chords: lineChords });
+    }
+    if (sanitized.length > 0) lyrics = sanitized;
+  }
+
+  return {
+    key,
+    confidence,
+    analysis,
+    ...(tempo && { tempo }),
+    chordProgressions,
+    ...(suggestions && { suggestions }),
+    ...(lyrics && { lyrics }),
+  };
 }

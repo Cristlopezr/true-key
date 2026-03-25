@@ -288,19 +288,23 @@ export function AIAnalysisResult({ result, isLoading, error }: AIAnalysisResultP
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {progression.chords.map((chord, chordIndex) => (
-                    <div
-                      key={chordIndex}
-                      className={cn(
-                        'px-3 py-1.5 rounded text-sm font-bold border',
-                        index === 0
-                          ? 'bg-indigo-500/20 text-indigo-200 border-indigo-500/30'
-                          : 'bg-white/10 text-neutral-200 border-white/10'
-                      )}
-                    >
-                      <HoverableChord chord={chord} />
-                    </div>
-                  ))}
+                  {progression.chords.map((chord, chordIndex) => {
+                    // Normalize: AI may return chord as object {chord, beat, measure} or as string
+                    const chordName = typeof chord === 'string' ? chord : (chord as any).chord ?? String(chord);
+                    return (
+                      <div
+                        key={chordIndex}
+                        className={cn(
+                          'px-3 py-1.5 rounded text-sm font-bold border',
+                          index === 0
+                            ? 'bg-indigo-500/20 text-indigo-200 border-indigo-500/30'
+                            : 'bg-white/10 text-neutral-200 border-white/10'
+                        )}
+                      >
+                        <HoverableChord chord={chordName} />
+                      </div>
+                    );
+                  })}
                 </div>
                 {progression.explanation && (
                   <details className="group/exp">
